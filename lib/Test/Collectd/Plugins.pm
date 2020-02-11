@@ -362,7 +362,50 @@ sub read_values ($$;$) {
 	eval "$reader()";
 	return if $@;
 	if (exists $FakeCollectd{$plugin}->{Values}) {
-		@{$FakeCollectd{$plugin}->{Values}};
+		# Returning reference instead of the de-referenced value
+		# otherwise the is_deeply is not working
+		$FakeCollectd{$plugin}->{Values};
+	} else {
+		return;
+	}
+}
+
+=head2 read_values_with_intervals (module, plugin, intervals, interval_period [ config ])
+
+The same as read_values but extra 2 params:
+- intervals: how many intervals to execute
+- interval_period: period in seconds between 2 intervals
+
+=cut
+
+sub read_values_with_intervals ($$$$;$) {
+	my $module = shift;
+	my $plugin = shift;
+	my $intervals = shift;
+	my $interval_period = shift;
+	my $config = shift;
+
+	_load_module($module);
+	_init_plugin($plugin);
+	# plugin with config callback
+	if ($config) {
+		_config($plugin,$config);
+	}
+
+	my $reader = $FakeCollectd{$plugin}->{Callback}->{Read};
+	return unless $reader;
+	_reset_values($plugin);
+	eval "$reader()";
+	return if $@;
+
+	for (my $i = 0; $i < $intervals; $i++) {
+		sleep $interval_period;
+		eval "$reader()";
+		return if $@;
+	}
+
+	if (exists $FakeCollectd{$plugin}->{Values}) {
+		$FakeCollectd{$plugin}->{Values};
 	} else {
 		return;
 	}
